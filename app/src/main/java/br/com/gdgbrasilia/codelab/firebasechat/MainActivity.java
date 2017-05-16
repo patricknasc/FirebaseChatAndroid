@@ -42,7 +42,11 @@ public class MainActivity extends AppCompatActivity {
 
     //TODO Importar o os packages do Firebase - fireImports
     private FirebaseApp app;
-
+    private FirebaseDatabase database;
+    private FirebaseAuth auth;
+    private FirebaseStorage storage;
+    private DatabaseReference databaseRef;
+    private StorageReference storageRef;
 
 
     private void setUsername(String username) {
@@ -93,6 +97,11 @@ public class MainActivity extends AppCompatActivity {
 
 
         // TODO Permitir que os usuários se desloguem - fireSignOut
+        logoutBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                auth.signOut();
+            }
+        });
 
 
 
@@ -108,10 +117,15 @@ public class MainActivity extends AppCompatActivity {
 
 
         //TODO Carregando os dados de configuração do Firebase no app - fireLoadConfig
+        app = FirebaseApp.getInstance();
+        database = FirebaseDatabase.getInstance(app);
+        auth = FirebaseAuth.getInstance(app);
+        storage = FirebaseStorage.getInstance(app);
 
 
 
         //TODO Recuperando uma referencia ao nó chat - fireDbRef
+        databaseRef = database.getReference("chat");
 
 
 
@@ -121,22 +135,54 @@ public class MainActivity extends AppCompatActivity {
 
                 //TODO Salvar a mensagem no DB,
                 // (não jogar na tela por aqui mais.) - firePushMessage
-                adapter.addMessage(chat);
+                //adapter.addMessage(chat);
+                databaseRef.push().setValue(chat);
                 messageTxt.setText("");
 
             }
         });
 
         //TODO Criar um listener para atualizar a tela quando nós filhos são adicionados ao db - fireMessagelistener
+        databaseRef.addChildEventListener(new ChildEventListener() {
+            public void onChildAdded(DataSnapshot snapshot, String s) {
+                // Recuperar a mensagem do snapshot e adicionar a UI
+                ChatMessage chat = snapshot.getValue(ChatMessage.class);
+                adapter.addMessage(chat);
+            }
+
+            public void onChildChanged(DataSnapshot dataSnapshot, String s) { }
+            public void onChildRemoved(DataSnapshot dataSnapshot) { }
+            public void onChildMoved(DataSnapshot dataSnapshot, String s) { }
+            public void onCancelled(DatabaseError databaseError) { }
+        });
+
 
 
 
 
         //TODO Após preencher a Dialog com as credentials, tentar se logar com o Email e Senha - fireEmailSignIn
+        LoginDialog.onCredentials(new OnSuccessListener<LoginDialog.EmailPasswordResult>() {
+            public void onSuccess(LoginDialog.EmailPasswordResult result) {
+                // Autentica o usuário com o email e senha fornecidos
+                auth.signInWithEmailAndPassword(result.email, result.password);
+            }
+        });
 
 
 
         //TODO Quando o usuário logar ou deslogar, atualizar seu username - fireOnAuthStateChanged
+        auth.addAuthStateListener(new FirebaseAuth.AuthStateListener() {
+            public void onAuthStateChanged(FirebaseAuth firebaseAuth) {
+                if (firebaseAuth.getCurrentUser() != null) {
+                    // User signed in, set their email address as the user name
+                    setUsername(firebaseAuth.getCurrentUser().getEmail());
+                }
+                else {
+                    // User signed out, set a default username
+                    setUsername("Android");
+                }
+            }
+        });
 
 
     }
@@ -146,13 +192,25 @@ public class MainActivity extends AppCompatActivity {
             Uri selectedImageUri = data.getData();
 
             //TODO Recuperar uma ref ao local de armazenam. de arquivos compart. - fireStorageRef
+            storageRef = storage.getReference("chat");
 
 
             //TODO Recuperar uma ref para o arquivo em chat_photos/<FILENAME>.jpg - fireFileRef
+            final StorageReference photoRef = storageRef.child(selectedImageUri.getLastPathSegment());
 
 
 
             //TODO Upload do arquivo para o Firebase Storage - firePutFile
+             photoRef.putFile(selectedImageUri)
+                 .addOnSuccessListener(this, new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                     public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                           // TODO Recuperar a url do upload para permitir salvar no DB e permitir a visualização
+                           //- fireOnUploadStateChanged
+                         Uri downloadUrl = taskSnapshot.getDownloadUrl();
+                         messageTxt.setText(downloadUrl.toString());
+
+                     }
+                 });
 
         }
     }
